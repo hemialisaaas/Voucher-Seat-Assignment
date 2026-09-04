@@ -1,123 +1,105 @@
-# Voucher Seat Assignment Application
+# Voucher Seat Assignment
 
-A web application for an airline promotional campaign that randomly assigns
-3 unique seat numbers to voucher winners, built with **Laravel** (backend
-REST API) and **React** (frontend).
+Aplikasi kecil untuk keperluan campaign promo maskapai — crew input data penerbangan, sistem bakal ngundi 3 kursi random buat pemenang voucher. Dibuat pakai Laravel di belakang dan React di depan.
 
-## Tech Stack
+Screenshot aplikasinya:
+<img width="1620" height="709" alt="image" src="https://github.com/user-attachments/assets/36424f68-02d9-43b9-9e5b-f4fb2616abd7" />
 
-- **Backend:** PHP 8.2+, Laravel 11
-- **Frontend:** React 18 + Vite
-- **Database:** SQLite
+<img width="1623" height="708" alt="image" src="https://github.com/user-attachments/assets/8fe3e81d-17a9-40d9-a670-289bcf058870" />
 
-## Project Structure
+
+
+## Kenapa dibuat begini
+
+Requirement-nya minta ada validasi supaya satu flight number + tanggal yang sama nggak bisa di-generate vouchernya dua kali. Jadi alurnya: cek dulu ke `/api/check`, kalau belum ada baru generate lewat `/api/generate`. Kalau langsung generate tanpa cek dulu, race condition-nya rawan — makanya di level database juga dikasih unique constraint sebagai jaring pengaman, bukan cuma andalin pengecekan di aplikasi.
+
+Untuk generate kursinya sendiri, logic-nya taruh di service class terpisah (`SeatGeneratorService`) biar controller-nya nggak gendut. Cara kerjanya: bikin dulu semua kombinasi kursi yang valid sesuai tipe pesawat (misal ATR cuma A/C/D/F, nggak ada B dan E), baru dari situ diambil 3 secara acak tanpa pengembalian. Jadi otomatis nggak akan pernah keluar kursi yang nggak valid atau duplikat — bukan dicek belakangan, tapi memang dari awal cuma kursi valid yang ada di dalam pool-nya.
+
+## Stack
+
+- Laravel 11 (PHP 8.2+)
+- React + Vite
+- SQLite (biar simpel, nggak perlu setup database server)
+
+## Struktur folder
 
 ```
-project/
-├── backend/          # Laravel application (REST API)
+voucher-project/
+├── backend/                 → Laravel API
 │   ├── app/
 │   │   ├── Http/
 │   │   │   ├── Controllers/VoucherController.php
-│   │   │   ├── Requests/CheckVoucherRequest.php
-│   │   │   ├── Requests/GenerateVoucherRequest.php
-│   │   │   └── Resources/VoucherResource.php
-│   │   │   └── Resources/VoucherCheckResource.php
+│   │   │   ├── Requests/           (validasi input)
+│   │   │   └── Resources/          (format response JSON)
 │   │   ├── Exceptions/VoucherAlreadyExistsException.php
 │   │   ├── Models/Voucher.php
 │   │   └── Services/SeatGeneratorService.php
 │   ├── database/migrations/
 │   ├── routes/api.php
 │   └── tests/Feature/VoucherApiTest.php
-├── frontend/         # React application
+├── frontend/                → React app
 │   └── src/App.jsx
 ├── docker-compose.yml
 └── README.md
 ```
 
-## Prerequisites
+## Cara jalanin
 
-- PHP 8.2 or higher
-- Composer 2.x
-- Node.js 18+ and npm
-- (Optional) Docker & Docker Compose, if you prefer the containerized setup
+### Yang perlu disiapin dulu
 
-## Setup & Run — Manual (without Docker)
+- PHP 8.2 ke atas
+- Composer
+- Node.js 18+ sama npm
+- Docker (opsional, kalau males install PHP/Node manual)
 
-### 1. Backend (Laravel)
+### Backend
 
 ```bash
 cd backend
-
-# Install PHP dependencies
 composer install
-
-# Configure environment
 cp .env.example .env
 php artisan key:generate
-
-# Create the SQLite database file
 touch database/database.sqlite
-
-# Run migrations (creates the `vouchers` table)
 php artisan migrate
-
-# Start the API server
 php artisan serve
 ```
 
-The API will be available at `http://localhost:8000`.
+Kalau lancar, API-nya jalan di `http://localhost:8000`.
 
-### 2. Frontend (React)
+### Frontend
 
-Open a new terminal:
+Buka terminal baru:
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Configure environment
 cp .env.example .env
-# (default already points to http://localhost:8000/api, adjust if needed)
-
-# Start the dev server
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`.
+Buka `http://localhost:5173` di browser.
 
-### 3. Run tests (optional but recommended)
+### Jalanin test (kalau mau)
 
 ```bash
 cd backend
 php artisan test
 ```
 
-## Setup & Run — with Docker
-
-From the project root:
+### Atau pakai Docker aja
 
 ```bash
 docker-compose up
 ```
 
-This starts both the backend (`http://localhost:8000`) and frontend
-(`http://localhost:5173`) containers, installing dependencies, running
-migrations, and starting both dev servers automatically.
+Ini bakal jalanin backend dan frontend sekaligus, dua-duanya. Untuk setup yang lebih niat lagi sebenarnya bisa pakai Laravel Sail, tapi buat kebutuhan sekarang docker-compose biasa udah cukup.
 
-> Note: the Docker setup uses plain `php:8.2-cli` and `node:20-alpine`
-> images with inline provisioning for simplicity. For a more
-> production-like setup, consider using **Laravel Sail**
-> (`composer require laravel/sail --dev && php artisan sail:install`).
+## Endpoint API
 
-## API Endpoints
+### Cek voucher sudah ada atau belum
 
-### `POST /api/check`
+`POST /api/check`
 
-Checks whether voucher assignments already exist for a given flight and date.
-
-**Request:**
 ```json
 {
   "flightNumber": "GA102",
@@ -125,16 +107,15 @@ Checks whether voucher assignments already exist for a given flight and date.
 }
 ```
 
-**Response:**
+Balikannya:
 ```json
 { "exists": true }
 ```
 
-### `POST /api/generate`
+### Generate voucher
 
-Generates 3 random, unique, aircraft-valid seats and persists the assignment.
+`POST /api/generate`
 
-**Request:**
 ```json
 {
   "name": "Sarah",
@@ -145,55 +126,20 @@ Generates 3 random, unique, aircraft-valid seats and persists the assignment.
 }
 ```
 
-**Response (success, HTTP 201):**
+Kalau berhasil (201):
 ```json
 { "success": true, "seats": ["3B", "7C", "14D"] }
 ```
 
-**Response (duplicate, HTTP 409):**
+Kalau ternyata udah pernah di-generate sebelumnya (409):
 ```json
 { "success": false, "message": "Vouchers have already been generated for flight ID102 on 2025-07-12." }
 ```
 
-**Response (validation error, HTTP 422):**
-```json
-{ "success": false, "message": "The given data was invalid.", "errors": { "aircraft": ["..."] } }
-```
+Kalau ada input yang salah/kosong (422), Laravel bakal balikin detail error-nya per field.
 
-## Design Notes
+## Catatan / hal yang mungkin masih bisa dibenerin
 
-- **Seat generation** lives in `App\Services\SeatGeneratorService`, decoupled
-  from the controller. It builds the full valid seat pool for the given
-  aircraft type (row range × seat letters, per the spec's seat layout
-  reference), then picks 3 unique seats from that pool using `array_rand`
-  without replacement — guaranteeing both uniqueness and aircraft validity
-  by construction (an invalid seat like `5B` on an ATR can never be
-  generated, since it's never added to the pool).
-- **Duplicate prevention** is enforced at two levels: an application-level
-  check in the controller (matches the `/api/check` contract), and a
-  **database-level unique constraint** on `(flight_number, flight_date)` as
-  a safety net against race conditions (e.g. two simultaneous requests for
-  the same flight/date).
-- **Validation** is handled via Laravel **Form Request** classes
-  (`CheckVoucherRequest`, `GenerateVoucherRequest`) with custom error
-  messages, keeping controllers thin.
-- **Response formatting** uses Laravel **API Resources**
-  (`VoucherResource`, `VoucherCheckResource`) for consistent JSON shapes.
-- **Error handling** uses a custom `VoucherAlreadyExistsException` (mapped
-  to HTTP 409) registered in `bootstrap/app.php`, plus a consistent JSON
-  shape for validation errors (HTTP 422).
-- **Feature tests** (`tests/Feature/VoucherApiTest.php`) cover: checking
-  existing/non-existing vouchers, required-field validation on both
-  endpoints, successful generation with unique/valid seats (including an
-  ATR-specific check that only `A/C/D/F` letters within rows 1–18 are ever
-  produced), aircraft type validation, and duplicate-assignment rejection.
-
-## Known Limitations / Possible Improvements
-
-- No authentication layer — out of scope per the assessment brief.
-- The seat pool is rebuilt on every request rather than cached; for the
-  scale of this application (a handful of aircraft types, small pools),
-  this has no meaningful performance impact.
-- Frontend has no automated tests (not required by the brief), but manual
-  testing confirms the check → generate flow and error states work
-  end-to-end.
+- Belum ada auth sama sekali — di luar scope assessment ini sih, tapi kalau mau dipakai beneran ya wajib ditambahin.
+- Seat pool-nya di-generate ulang tiap kali ada request, bukan di-cache. Buat jumlah pesawat yang cuma 3 tipe kayak sekarang nggak masalah, tapi kalau tipe pesawatnya banyak banget mungkin worth dipikirin caching-nya.
+- Frontend belum ada automated test, cuma dicek manual aja alur check → generate-nya sama error state-nya, dan sejauh ini aman.
